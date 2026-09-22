@@ -1,0 +1,31 @@
+﻿# Dockerfile.ui -- Week 11: containerizes the Week 10 Streamlit UI
+# (src/ui/streamlit_app.py).
+#
+# This image only needs Streamlit and an HTTP client. The UI never imports
+# BM25Index, DenseIndex, the classifier, or the RAG generator directly --
+# it only ever calls the API over HTTP through src/ui/api_client.py (see
+# that file's docstring) -- so none of the API image's ML stack (torch,
+# transformers, faiss-cpu, sentence-transformers) belongs here. That's the
+# real payoff of the thin-client architecture from Week 10: this image
+# builds in seconds and stays well under 1GB, instead of inheriting the
+# API's multi-GB dependency footprint for no reason.
+FROM python:3.10-slim
+
+WORKDIR /app
+
+COPY requirements-ui.txt .
+RUN pip install --no-cache-dir -r requirements-ui.txt
+
+COPY src/ src/
+
+ENV PYTHONUNBUFFERED=1
+
+EXPOSE 8501
+
+# Streamlit exposes this health endpoint itself -- no custom route needed.
+# Verified for real against the installed streamlit version before shipping
+# this: `curl http://127.0.0.1:PORT/_stcore/health` returns HTTP 200.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+    CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8501/_stcore/health', timeout=3).status == 200 else 1)"
+
+CMD ["streamlit", "run", "src/ui/streamlit_app.py", "--server.address=0.0.0.0", "--server.port=8501"]

@@ -1,0 +1,50 @@
+﻿# docker-compose.yml -- Week 11: runs the API and UI together, wired up the
+# same way the manual two-terminal instructions from Week 10 did, but as
+# two containers on one Docker network instead of two local processes.
+#
+# Usage (from the project root, alongside this file):
+#   docker compose up --build
+# then open http://localhost:8501 for the UI. The API is also reachable
+# directly at http://localhost:8000/docs (Swagger UI) for the same manual
+# testing Week 9 used.
+#
+# To enable /rag, export ANTHROPIC_API_KEY in your shell before running
+# `docker compose up` (or put it in a .env file next to this one -- Compose
+# reads .env automatically) -- same requirement as running run_api_server.py
+# directly.
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    ports:
+      - "8000:8000"
+    volumes:
+      # Mounts your real corpus, cached dense index, and trained classifier
+      # from the host -- see Dockerfile.api's comment on why these aren't
+      # baked into the image itself.
+      - ./data:/app/data
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health', timeout=3).status == 200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
+
+  ui:
+    build:
+      context: .
+      dockerfile: Dockerfile.ui
+    ports:
+      - "8501:8501"
+    environment:
+      # Overrides streamlit_app.py's 127.0.0.1:8000 fallback: inside this
+      # container's own network namespace, 127.0.0.1 is the UI container
+      # itself, not the API container. "api" resolves via Compose's
+      # built-in DNS to the api service above.
+      - API_BASE_URL=http://api:8000
+    depends_on:
+      api:
+        condition: service_healthy

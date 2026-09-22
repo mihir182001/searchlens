@@ -1,0 +1,24 @@
+﻿# requirements-dev.txt -- Week 11: the full local-development / CI
+# environment. Installs both services' runtime dependencies plus test-only
+# tooling, so `python -m pytest tests/ -v` can exercise the entire suite
+# (all 189 tests as of Week 10) in one venv, the way local development and
+# GitHub Actions CI both need.
+#
+# Deliberately built from `-r` includes of requirements-api.txt and
+# requirements-ui.txt rather than repeating package names (and versions)
+# here -- every package lives in exactly one file (the service that owns
+# it), so there is only ever one place to update a version and no way for
+# this file to drift out of sync with what the Docker images actually
+# install. (requirements.txt used to be exactly that kind of drift: it
+# listed neither faiss-cpu, sentence-transformers, torch, transformers, nor
+# anthropic -- all four are genuinely required for the API to run for real
+# -- while still listing pandas, which nothing in this project imports.)
+-r requirements-api.txt
+-r requirements-ui.txt
+
+pytest==9.1.1
+httpx==0.28.1  # needed for FastAPI's TestClient in tests/test_api.py
+
+# One-off data-prep script only (src/data/... Week 1's real-data swap from
+# MS MARCO) -- not needed to run the tests, the API, or the UI:
+#   pip install datasets

@@ -1,0 +1,14 @@
+﻿# .dockerignore -- Week 11. Neither image COPYs data/ (it's mounted as a
+# volume at runtime -- see Dockerfile.api's comment on why), so excluding it
+# here just keeps the build context small and the build fast: without this,
+# every `docker build` would zip up and send the full corpus/model/index
+# files to the Docker daemon even though no COPY instruction ever uses them.
+data/
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.git/
+tests/
+.github/
+*.md

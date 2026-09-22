@@ -1,0 +1,34 @@
+﻿# Dockerfile.api -- Week 11: containerizes the Week 9 FastAPI service
+# (src/api/app.py + src/api/run_api_server.py).
+#
+# Model weights, the trained query-intent classifier, and the cached dense
+# index are deliberately NOT baked into this image -- they're mounted at
+# runtime from ./data (see docker-compose.yml). Baking multi-GB model/data
+# artifacts into an image is the wrong default here: it would make the
+# image huge, tie every code change to a full data re-copy, and make the
+# image useless without also shipping the exact data it was built with.
+# Mounting ./data keeps this image to "code + dependencies" and lets you
+# swap in a retrained model without rebuilding anything.
+FROM python:3.10-slim
+
+WORKDIR /app
+
+# torch/faiss-cpu ship prebuilt CPU wheels on PyPI for this platform, so no
+# compiler or extra system packages are needed beyond the slim base image.
+COPY requirements-api.txt .
+RUN pip install --no-cache-dir -r requirements-api.txt
+
+COPY src/ src/
+
+ENV PYTHONUNBUFFERED=1
+
+EXPOSE 8000
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+    CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health', timeout=3).status == 200 else 1)"
+
+# `python -m uvicorn ...` (rather than a bare `uvicorn` entrypoint) so the
+# working directory (/app) is on sys.path the same way it is when you run
+# `python -m src.api.run_api_server` locally -- src.api.run_api_server:app
+# needs `src` importable as a package.
+CMD ["python", "-m", "uvicorn", "src.api.run_api_server:app", "--host", "0.0.0.0", "--port", "8000"]
